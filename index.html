@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#eee8dc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="La Mia Agenda">
+<title>La Mia Agenda</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eee8dc;color:#302d28;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}
+#app{max-width:760px;margin:auto;padding-bottom:35px}header{display:flex;align-items:center;justify-content:space-between;padding:22px 18px 8px}
+header button{border:0;background:#dcd4c5;border-radius:50%;width:44px;height:44px;font-size:31px;color:#514b42}
+.heading{text-align:center}.weekday{font-size:14px;text-transform:uppercase;letter-spacing:2px;color:#81786a}.date{font-size:27px;font-weight:700;margin-top:2px}
+.toolbar{display:flex;gap:8px;padding:8px 18px 16px}.toolbar button{border:0;border-radius:18px;background:#ded6c8;padding:9px 15px;font-weight:600;color:#514b42}
+#agenda{margin:0 14px;background:#faf7f0;border-radius:18px;overflow:hidden;box-shadow:0 2px 12px #00000010}
+.slot{display:flex;min-height:62px;border-bottom:1px solid #e5dfd5}.time{width:68px;padding:9px 8px;text-align:right;color:#8b8173;font-size:13px}.cell{flex:1;border-left:1px solid #e5dfd5;padding:7px 9px;position:relative}.cell:active{background:#f0eadf}.event{border-radius:9px;padding:7px 9px;color:white;font-size:14px;min-height:44px;box-shadow:0 1px 3px #0002}.event small{display:block;opacity:.85;margin-top:2px}.blue{background:#5f83a5}.red{background:#b86a67}.orange{background:#c58b4b}.green{background:#6f9170}.purple{background:#8b759c}
+.notes{margin:16px 14px;background:#faf7f0;border-radius:18px;padding:15px}.notes label{font-size:12px;letter-spacing:1.5px;color:#8b8173;font-weight:700}.notes textarea{width:100%;height:110px;border:0;background:transparent;resize:none;outline:0;font:16px inherit;margin-top:8px}
+.modal{display:none;position:fixed;inset:0;background:#0007;align-items:flex-end;justify-content:center;padding:14px;z-index:5}.modal.show{display:flex}.card{width:min(600px,100%);background:#faf7f0;border-radius:22px;padding:20px;box-shadow:0 10px 40px #0005}.card h2{margin:0 0 14px}.card input,.card textarea,.card select{width:100%;padding:12px;border:1px solid #d8d0c2;border-radius:12px;background:white;font:inherit;margin-bottom:10px}.card textarea{height:90px;resize:none}.row{display:flex;gap:15px;align-items:center;font-size:14px}.row label{flex:1}.row input[type=checkbox],.setting input{width:auto}.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}.actions button{border:0;border-radius:13px;padding:11px 17px;background:#4f6f58;color:white;font-weight:700}.actions .secondary{background:#ddd5c8;color:#514b42}.small{font-size:13px;color:#888}
+body.dark{background:#1c1b1a;color:#eee}body.dark #agenda,body.dark .notes,body.dark .card{background:#292725}body.dark .slot{border-color:#403c37}body.dark .cell{border-color:#403c37}body.dark .toolbar button,body.dark header button{background:#393631;color:#eee}body.dark .notes textarea{color:#eee}
+</style>
+</head>
+<body>
+<div id="app">
+<header><button onclick="changeDay(-1)">‹</button><div class="heading"><div class="weekday" id="weekday"></div><div class="date" id="date"></div></div><button onclick="changeDay(1)">›</button></header>
+<div class="toolbar"><button onclick="goToday()">Oggi</button><button onclick="pickDate()">📅</button><button onclick="openSearch()">⌕</button><button onclick="openSettings()">⚙︎</button></div>
+<main id="agenda"></main>
+<section class="notes"><label>NOTE DEL GIORNO</label><textarea id="notes" placeholder="Scrivi qui..."></textarea></section>
+</div>
+
+<div class="modal" id="eventModal"><div class="card">
+<h2>Nuovo appuntamento</h2><input id="title" placeholder="Titolo">
+<textarea id="details" placeholder="Dettagli"></textarea>
+<div class="row"><label>Colore<select id="color"><option value="blue">Blu</option><option value="red">Rosso</option><option value="orange">Arancione</option><option value="green">Verde</option><option value="purple">Viola</option></select></label><label><input type="checkbox" id="reminder"> Promemoria</label></div>
+<div class="actions"><button class="secondary" onclick="closeModal()">Annulla</button><button onclick="saveEvent()">Salva</button></div>
+</div></div>
+
+<div class="modal" id="searchModal"><div class="card"><h2>Cerca appuntamenti</h2><input id="search" placeholder="Cerca..." oninput="doSearch()"><div id="results"></div><div class="actions"><button onclick="closeSearch()">Chiudi</button></div></div></div>
+<div class="modal" id="settingsModal"><div class="card"><h2>Impostazioni</h2><label class="setting"><input type="checkbox" id="dark" onchange="toggleDark()"> Modalità scura</label><p>Orario agenda: <b>06:00 – 23:00</b></p><p class="small">Gli appuntamenti e le note sono salvati su questo dispositivo.</p><div class="actions"><button onclick="closeSettings()">Fine</button></div></div></div>
+
+<script>
+let selectedDate=new Date(), selectedHour=6, events=JSON.parse(localStorage.getItem('agendaEvents')||'{}');
+const days=['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const months=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const key=d=>d.toISOString().slice(0,10);
+function render(){document.getElementById('weekday').textContent=days[selectedDate.getDay()];document.getElementById('date').textContent=`${selectedDate.getDate()} ${months[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;let k=key(selectedDate);let html='';for(let h=6;h<=23;h++){let e=(events[k]||[]).filter(x=>x.hour===h);html+=`<div class="slot"><div class="time">${String(h).padStart(2,'0')}:00</div><div class="cell" onclick="openEvent(${h})">${e.map((x,i)=>`<div class="event ${x.color}" onclick="event.stopPropagation();deleteEvent(${i},${h})"><b>${esc(x.title)}</b>${x.details?`<small>${esc(x.details)}</small>`:''}</div>`).join('')}</div></div>`}document.getElementById('agenda').innerHTML=html;let n=localStorage.getItem('notes_'+k)||'';document.getElementById('notes').value=n;document.getElementById('notes').oninput=e=>localStorage.setItem('notes_'+k,e.target.value)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function changeDay(n){selectedDate.setDate(selectedDate.getDate()+n);render()}function goToday(){selectedDate=new Date();render()}
+function pickDate(){let s=prompt('Inserisci la data (GG/MM/AAAA)');if(!s)return;let [d,m,y]=s.split('/').map(Number);if(d&&m&&y){selectedDate=new Date(y,m-1,d);render()}}
+function openEvent(h){selectedHour=h;document.getElementById('eventModal').classList.add('show');document.getElementById('title').focus()}
+function closeModal(){document.getElementById('eventModal').classList.remove('show');document.getElementById('title').value='';document.getElementById('details').value=''}
+function saveEvent(){let t=document.getElementById('title').value.trim();if(!t)return;let k=key(selectedDate);(events[k]||(events[k]=[])).push({hour:selectedHour,title:t,details:document.getElementById('details').value.trim(),color:document.getElementById('color').value,reminder:document.getElementById('reminder').checked});localStorage.setItem('agendaEvents',JSON.stringify(events));closeModal();render()}
+function deleteEvent(i,h){let k=key(selectedDate);let arr=(events[k]||[]).filter(x=>x.hour===h);let target=arr[i];events[k]=events[k].filter(x=>x!==target);localStorage.setItem('agendaEvents',JSON.stringify(events));render()}
+function openSearch(){document.getElementById('searchModal').classList.add('show');document.getElementById('search').focus();doSearch()}
+function closeSearch(){document.getElementById('searchModal').classList.remove('show')}
+function doSearch(){let q=document.getElementById('search').value.toLowerCase(),out=[];Object.entries(events).forEach(([d,arr])=>arr.forEach(x=>{if(!q||x.title.toLowerCase().includes(q)||(x.details||'').toLowerCase().includes(q))out.push(`<p><b>${d} ${String(x.hour).padStart(2,'0')}:00</b> — ${esc(x.title)}</p>`)}));document.getElementById('results').innerHTML=out.slice(0,30).join('')||'<p>Nessun risultato.</p>'}
+function openSettings(){document.getElementById('settingsModal').classList.add('show');document.getElementById('dark').checked=document.body.classList.contains('dark')}
+function closeSettings(){document.getElementById('settingsModal').classList.remove('show')}
+function toggleDark(){let on=document.getElementById('dark').checked;document.body.classList.toggle('dark',on);localStorage.setItem('dark',on?'1':'0')}
+if(localStorage.getItem('dark')==='1')document.body.classList.add('dark');render();
+</script>
+</body>
+</html>
